@@ -1,9 +1,9 @@
 package com.comet.nfc_sever.service;
 
 import org.springframework.stereotype.Service;
-import org.springframework.util.Base64Utils;
 
 import javax.crypto.Cipher;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.Charset;
 import java.security.*;
 import java.util.Base64;
@@ -24,7 +24,7 @@ public class EncryptService {
             e.printStackTrace();
         }
     }
-    protected String encrypt(String input) {
+     public String encrypt(String input) {
         init();
         try {
             Cipher cipher = Cipher.getInstance("RSA");
@@ -38,7 +38,7 @@ public class EncryptService {
         }
     }
 
-    protected String decrypt(String input) {
+     public String decrypt(String input) {
         init();
         try {
             Cipher cipher = Cipher.getInstance("RSA");
@@ -56,6 +56,36 @@ public class EncryptService {
     public String getPublicKey() {
         init();
         return Base64.getUrlEncoder().encodeToString(keyPair.getPublic().getEncoded());
+    }
+
+    //AES는 16, 24, 32 바이트여야 암호화 가ㅡㄴㅇ
+    public String AESEncrypt(String input, String key) {
+        Key secretKeySpec = new SecretKeySpec(key.substring(0, 16).getBytes(), "AES");
+        try {
+            Cipher cipher = Cipher.getInstance("AES");
+            cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec);
+            byte[] encrypt = cipher.doFinal(input.getBytes());
+            return Base64.getUrlEncoder().encodeToString(encrypt);
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public String AESDecrypt(String input, String key) {
+        Key secretKeySpec = new SecretKeySpec(key.substring(0, 16).getBytes(), "AES");
+        try {
+            Cipher cipher = Cipher.getInstance("AES");
+            cipher.init(Cipher.DECRYPT_MODE, secretKeySpec);
+            byte[] urlDecode = Base64.getUrlDecoder().decode(input.getBytes());
+            byte[] decrypt = cipher.doFinal(urlDecode);
+            return new String(decrypt);
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 
     private void init() {

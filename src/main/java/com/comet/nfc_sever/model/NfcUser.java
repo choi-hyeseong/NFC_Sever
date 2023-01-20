@@ -15,7 +15,7 @@ import java.util.UUID;
 @Builder
 @Getter
 @Setter
-public class NfcUser {
+public class NfcUser extends BaseEntity{
 
     @Id
     @GeneratedValue (strategy = GenerationType.IDENTITY)
@@ -29,6 +29,8 @@ public class NfcUser {
 
     @NotNull
     private String authKey;
+
+    private boolean isLocked; //현재 잠겨있는지 여부
 
 
 }
