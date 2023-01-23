@@ -12,12 +12,13 @@ import java.util.Map;
 @Slf4j
 public class RestInterceptor implements AsyncHandlerInterceptor {
 
+    /*POST 요청은 InputStream 으로 읽어야 하는데 객체 래핑으로 인한 오버헤드 발생가능성 있음*/
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         if (request.getParameterMap().isEmpty())
-            log.info("url : {}", request.getRequestURL());
+            log.info("url : {}, type : {}", request.getRequestURL(), request.getMethod());
         else
-            log.info("url : {} | param : {}", request.getRequestURL(), mapFlatter(request.getParameterMap()));
+            log.info("url : {}, type : {} | param : {}", request.getRequestURL(), request.getMethod(), mapFlatter(request.getParameterMap()));
         return AsyncHandlerInterceptor.super.preHandle(request, response, handler);
     }
 
@@ -27,8 +28,8 @@ public class RestInterceptor implements AsyncHandlerInterceptor {
     }
 
     private String mapFlatter(Map<String, String[]> input) {
-        StringBuilder builder = new StringBuilder(); //비동기지만 객체 생성이므로 싱글쓰레드로 판단.
-        for (String key : input.keySet()) { //pro : [경북, 서울], city : [김천, 구미] 대충 이렇게?
+        StringBuilder builder = new StringBuilder();
+        for (String key : input.keySet()) {
             String[] value = input.get(key);
             builder.append(key).append(" : ").append(Arrays.toString(value)).append(" ");
         }

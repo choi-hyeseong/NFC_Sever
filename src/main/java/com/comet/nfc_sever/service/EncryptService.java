@@ -1,5 +1,6 @@
 package com.comet.nfc_sever.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
@@ -9,6 +10,7 @@ import java.security.*;
 import java.util.Base64;
 
 @Service
+@Slf4j
 public class EncryptService {
 
     private KeyPair keyPair;
@@ -21,7 +23,7 @@ public class EncryptService {
             keyPair = generator.genKeyPair();
         }
         catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
+            log.error(e.getLocalizedMessage());
         }
     }
      public String encrypt(String input) {
@@ -33,7 +35,7 @@ public class EncryptService {
             return Base64.getUrlEncoder().encodeToString(encryptByte); //Base64.getEncoder().encodeToString() 사용시 + 문자를 공백으로 치환해버림..
         }
         catch (Exception e) {
-            e.printStackTrace();
+            log.error(e.getLocalizedMessage());
             return null;
         }
     }
@@ -48,7 +50,7 @@ public class EncryptService {
             return new String(decryptByte);
         }
         catch (Exception e) {
-            e.printStackTrace();
+            log.error(e.getLocalizedMessage());
             return null;
         }
     }
@@ -58,7 +60,7 @@ public class EncryptService {
         return Base64.getUrlEncoder().encodeToString(keyPair.getPublic().getEncoded());
     }
 
-    //AES는 16, 24, 32 바이트여야 암호화 가ㅡㄴㅇ
+    //AES 는 16, 24, 32 바이트여야 암호화 가ㅡㄴㅇ
     public String AESEncrypt(String input, String key) {
         Key secretKeySpec = new SecretKeySpec(key.substring(0, 16).getBytes(), "AES");
         try {
@@ -68,7 +70,7 @@ public class EncryptService {
             return Base64.getUrlEncoder().encodeToString(encrypt);
         }
         catch (Exception e) {
-            e.printStackTrace();
+            log.error(e.getLocalizedMessage());
             return null;
         }
     }
@@ -83,7 +85,7 @@ public class EncryptService {
             return new String(decrypt);
         }
         catch (Exception e) {
-            e.printStackTrace();
+            log.error(e.getLocalizedMessage());
             return null;
         }
     }
