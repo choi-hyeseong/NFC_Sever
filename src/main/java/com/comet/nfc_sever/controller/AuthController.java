@@ -2,6 +2,7 @@ package com.comet.nfc_sever.controller;
 
 import com.comet.nfc_sever.dto.NfcUserRequestDto;
 import com.comet.nfc_sever.model.EncryptTwin;
+import com.comet.nfc_sever.model.Twin;
 import com.comet.nfc_sever.response.WebResponse;
 import com.comet.nfc_sever.service.EncryptService;
 import com.comet.nfc_sever.service.NfcUserService;
@@ -31,13 +32,13 @@ public class AuthController {
         String authId = StringUtil.generateRandomString(10); //10자리 인증 코드
         String encDelete = encryptService.AESEncrypt(deleteId, id);
         String encAuth = encryptService.AESEncrypt(authId, id);
-
         if (encDelete != null && encAuth != null) {
+            Twin<String, String> encResponse = new Twin<>(encAuth, encDelete);
             dto.setId(id);
             dto.setDel(deleteId);
             dto.setAuth(authId);
             userService.createUser(dto);
-            return new ResponseEntity<>(new WebResponse<>("Created!", new EncryptTwin(encAuth, encDelete)), HttpStatus.OK);
+            return new ResponseEntity<>(new WebResponse<>("Created!", new EncryptTwin(encResponse)), HttpStatus.OK);
         }
         else
             return ResponseEntity.internalServerError().build();
