@@ -7,7 +7,6 @@ import com.comet.nfc_sever.service.EncryptService;
 import com.comet.nfc_sever.service.NfcUserService;
 import com.comet.nfc_sever.util.StringUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
@@ -76,7 +75,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
 
             }
 
-            if (status == Status.RESPONSE) {
+            else if (status == Status.RESPONSE) {
                //MDM RESPONSE
                //내일의 내가 구현해줄거
             }
