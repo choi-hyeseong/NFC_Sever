@@ -3,8 +3,8 @@ package com.comet.nfc_sever.handler;
 import com.comet.nfc_sever.dto.SocketMessageDto;
 import com.comet.nfc_sever.model.AuthSocketSession;
 import com.comet.nfc_sever.model.Twin;
+import com.comet.nfc_sever.service.EncryptService;
 import com.comet.nfc_sever.service.NfcUserService;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,62 +12,93 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
-import org.springframework.web.socket.PongMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
+
+import static com.comet.nfc_sever.dto.SocketMessageDto.Status;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class WebSocketHandler extends TextWebSocketHandler {
 
+    // TODO concurrent 문제 확인
     //멀티쓰레드 concurrent 방지 위한 동기화 set
     private final Set<Twin<Long, WebSocketSession>> sessions = Collections.synchronizedSet(new HashSet<>()); //접속 시간, 세션 Twin
     private final Set<AuthSocketSession> authSessions = Collections.synchronizedSet(new HashSet<>()); //인증된 세션
 
-    // TODO 세션 인증 시간 두기, 구분짓기
     private final ObjectMapper mapper;
     private final NfcUserService service;
+    private final EncryptService encryptService;
+
     @Value("${nfc.server.auth-timeout}")
     private long timeout;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
-        log.info("connection established : " + session.getId());
+        log.info("connection established : {}", session.getId());
         sessions.add(new Twin<>(System.currentTimeMillis(), session));
     }
 
     //나중에 error exception 처리하기
+    @SuppressWarnings("OptionalGetWithoutIsPresent")
     @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws JsonProcessingException {
-        log.info("receive message from session " + session.getId() + " " + message.getPayload());
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws IOException {
+        log.info("receive message from session {}, {}", session.getId(), message.getPayload());
         String payload = message.getPayload();
         SocketMessageDto dto = mapper.readValue(payload, SocketMessageDto.class); //JSON.stringify() 사용
-        if (dto.getStatus() == SocketMessageDto.Status.HAND_SHAKE) {
-            //logic
+        SocketMessageDto.Status status = dto.getStatus();
+        log.info("mapped value : {}", dto.getStatus());
+        if (existBySession(session)) {
+            //인증 된경우
+            AuthSocketSession socketSession = findBySession(session).get(); //exist 로 체크후 작동
+            if (status == Status.PONG)
+                socketSession.setPong(true); //PONG
+            else
+                sendMessage("Bad Request", session);
         }
         else {
+            if (status == SocketMessageDto.Status.HAND_SHAKE) {
+                //핸드 쉐이킹만 인식.
+                String data = dto.getData(); //UUID 암호화된 데이터
+                String decrypt = encryptService.decrypt(data);
+                if (decrypt == null) { //복호화 실패
+                    sendMessage("UUID decrypt failed", session);
+                    return;
+                }
 
+                UUID uuid = UUID.fromString(decrypt);
+                if (!service.isUserExist(uuid)) {
+                    sendMessage("That UUID isn't exist", session);
+                    return;
+                }
+
+                if (existByUUID(uuid)) {
+                    //이미 인증된 세션이 존재하는경우
+                    sendMessage("Already Authentication Session exists.", session);
+                    return;
+                }
+
+                authSessions.add(new AuthSocketSession(uuid, session, true));
+                sendMessage("Authentication success", session);
+
+            }
+            else {
+                sendMessage("Bad Request", session);
+            }
         }
-        log.info("mapped value : " + dto.getStatus());
-    }
 
-    @Override
-    protected void handlePongMessage(WebSocketSession session, PongMessage message) {
-        log.info("receive pong message from session " + session.getId());
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         //여기서는 리스트 세션 종료.
         removeSession(session);
-        log.info("connection closed : " + session.getId());
+        log.info("connection closed : {}", session.getId());
     }
 
     //async socket 검증
@@ -91,11 +122,56 @@ public class WebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    @Scheduled(fixedDelayString = "${nfc.server.ping-interval}")
+    public void ping() {
+        synchronized (authSessions) {
+            //리스트 삭제 위한 시도
+            new HashSet<>(authSessions).forEach((auth) -> {
+                try {
+                    WebSocketSession socketSession = auth.getSession();
+                    boolean isPong = auth.isPong();
+                    if (!isPong || !socketSession.isOpen()) {
+                        //응답 못함 or 닫힘
+                        if (socketSession.isOpen())
+                            socketSession.close();
+                        authSessions.remove(auth);
+                    }
+                    else {
+                        auth.setPong(false); //다시 pong 대기
+                        sendObject(new SocketMessageDto(Status.PING, ""), socketSession);
+                    }
+                }
+                catch (Exception e) {
+                    log.error(e.getLocalizedMessage());
+                }
+            });
+
+        }
+    }
+
     private boolean existBySession(WebSocketSession session) {
         return authSessions.stream().anyMatch((auth) -> auth.getSession().equals(session));
     }
 
+    private boolean existByUUID(UUID uuid) {
+        return authSessions.stream().anyMatch((auth) -> auth.getUuid().equals(uuid));
+    }
+
+
+    private Optional<AuthSocketSession> findBySession(WebSocketSession session) {
+        return authSessions.stream().filter((auth) -> auth.getSession().equals(session)).findFirst();
+    }
+
     private void removeSession(WebSocketSession session) {
-        // TODO 구현필수. 둘다 삭제하기
+        sessions.removeIf((sess) -> sess.getSecond().equals(session));
+        authSessions.removeIf((auth) -> auth.getSession().equals(session));
+    }
+
+    private void sendMessage(String text, WebSocketSession session) throws IOException {
+        sendObject(new SocketMessageDto(SocketMessageDto.Status.RESPONSE, text), session);
+    }
+
+    private void sendObject(SocketMessageDto dto, WebSocketSession session) throws IOException {
+        session.sendMessage(new TextMessage(mapper.writeValueAsString(dto)));
     }
 }

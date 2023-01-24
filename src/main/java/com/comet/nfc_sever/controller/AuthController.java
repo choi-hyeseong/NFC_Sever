@@ -27,7 +27,7 @@ public class AuthController {
 
     @PostMapping("/auth")
     public ResponseEntity<WebResponse<EncryptTwin>> auth(@Valid @RequestBody NfcUserRequestDto dto) {
-        String id = dto.getId();
+        String id = encryptService.decrypt(dto.getId()); //복호화 안함..?
         String deleteId = StringUtil.generateRandomString(10); //10자리 삭제 코드
         String authId = StringUtil.generateRandomString(10); //10자리 인증 코드
         String encDelete = encryptService.AESEncrypt(deleteId, id);

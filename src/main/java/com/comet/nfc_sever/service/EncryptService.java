@@ -41,6 +41,8 @@ public class EncryptService {
     }
 
      public String decrypt(String input) {
+        if (input == null || input.equals(""))
+            return null;
         init();
         try {
             Cipher cipher = Cipher.getInstance("RSA");
