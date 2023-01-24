@@ -5,10 +5,12 @@ import com.comet.nfc_sever.model.AuthSocketSession;
 import com.comet.nfc_sever.model.Twin;
 import com.comet.nfc_sever.service.EncryptService;
 import com.comet.nfc_sever.service.NfcUserService;
+import com.comet.nfc_sever.util.StringUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -22,7 +24,6 @@ import java.util.*;
 import static com.comet.nfc_sever.dto.SocketMessageDto.Status;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class WebSocketHandler extends TextWebSocketHandler {
 
@@ -34,6 +35,13 @@ public class WebSocketHandler extends TextWebSocketHandler {
     private final ObjectMapper mapper;
     private final NfcUserService service;
     private final EncryptService encryptService;
+
+    // handler 입장에서는 천천히 로딩해도 됨.
+    public WebSocketHandler(ObjectMapper mapper, EncryptService encryptService, @Lazy NfcUserService service) {
+        this.mapper = mapper;
+        this.service = service;
+        this.encryptService = encryptService;
+    }
 
     @Value("${nfc.server.auth-timeout}")
     private long timeout;
@@ -56,8 +64,22 @@ public class WebSocketHandler extends TextWebSocketHandler {
         if (existBySession(session)) {
             //인증 된경우
             AuthSocketSession socketSession = findBySession(session).get(); //exist 로 체크후 작동
-            if (status == Status.PONG)
+            if (status == Status.PONG) {
                 socketSession.setPong(true); //PONG
+                //mdm logic
+                if (socketSession.getIsMdmRequested().getFirst()) {
+                    //request 여부
+                    boolean value = socketSession.getIsMdmRequested().getSecond();
+                    socketSession.setIsMdmRequested(new Twin<>(false, false));
+                    sendMdmRequest(socketSession, value);
+                }
+
+            }
+
+            if (status == Status.RESPONSE) {
+               //MDM RESPONSE
+               //내일의 내가 구현해줄거
+            }
             else
                 sendMessage("Bad Request", session);
         }
@@ -83,13 +105,13 @@ public class WebSocketHandler extends TextWebSocketHandler {
                     return;
                 }
 
-                authSessions.add(new AuthSocketSession(uuid, session, true));
+                authSessions.add(new AuthSocketSession(uuid, session));
                 sendMessage("Authentication success", session);
 
             }
-            else {
+            else
                 sendMessage("Bad Request", session);
-            }
+
         }
 
     }
@@ -149,6 +171,10 @@ public class WebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    public void sendMDMCommand(UUID uuid, boolean value) {
+        findByUUID(uuid).ifPresent(authSocketSession -> authSocketSession.setIsMdmRequested(new Twin<>(true, value))); //다음 핑퐁시 작동됨.
+    }
+
     private boolean existBySession(WebSocketSession session) {
         return authSessions.stream().anyMatch((auth) -> auth.getSession().equals(session));
     }
@@ -157,6 +183,19 @@ public class WebSocketHandler extends TextWebSocketHandler {
         return authSessions.stream().anyMatch((auth) -> auth.getUuid().equals(uuid));
     }
 
+    private void sendMdmRequest(AuthSocketSession session, boolean value) throws IOException {
+        // 실질적인 mdm 리퀘스트 부분..
+        // AUTH|TRASH_STR|value
+        WebSocketSession socketSession = session.getSession();
+        String auth = service.getAuthKey(session.getUuid());
+        String encAuth = encryptService.AESEncrypt(auth + "|" + StringUtil.generateRandomString(5) + "|" + value, session.getUuid().toString());
+        SocketMessageDto dto = new SocketMessageDto(Status.EXECUTE_MDM, encAuth);
+        sendObject(dto, socketSession);
+    }
+
+    private Optional<AuthSocketSession> findByUUID(UUID uuid) {
+        return authSessions.stream().filter((auth) -> auth.getUuid().equals(uuid)).findFirst();
+    }
 
     private Optional<AuthSocketSession> findBySession(WebSocketSession session) {
         return authSessions.stream().filter((auth) -> auth.getSession().equals(session)).findFirst();
