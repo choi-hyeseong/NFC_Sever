@@ -77,7 +77,24 @@ public class WebSocketHandler extends TextWebSocketHandler {
 
             else if (status == Status.RESPONSE) {
                //MDM RESPONSE
-               //내일의 내가 구현해줄거
+                UUID uuid = socketSession.getUuid();
+                String auth = service.getAuthKey(uuid);
+                String data = dto.getData(); //공개키 암호화 데이터
+                String decryptData = encryptService.decrypt(data);
+                if (decryptData != null) {
+                    String[] result = decryptData.split("\\|");
+                    //AUTH|TRASH|value
+                    if (result.length == 3 && result[0].equals(auth)) {
+                        //정상적 응답
+                        boolean value = Boolean.parseBoolean(result[2]); //boolean 이 아닐경우 false
+                        service.setUserLockStatus(uuid, value);
+                        sendObject(new SocketMessageDto(Status.RESPONSE, "Status accepted."), session); //응답 잘받았음
+                    }
+                    else
+                        sendMessage("Data isn't valid", session);
+                }
+                else
+                    sendMessage("Data must be encrypted", session);
             }
             else
                 sendMessage("Bad Request", session);
