@@ -45,7 +45,7 @@ public class EncryptService {
             return null;
         init();
         try {
-            Cipher cipher = Cipher.getInstance("RSA");
+            Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding"); //안드로이드 호환성 패딩
             cipher.init(Cipher.DECRYPT_MODE, keyPair.getPrivate());
             byte[] decodeByte = Base64.getUrlDecoder().decode(input);
             byte[] decryptByte = cipher.doFinal(decodeByte);

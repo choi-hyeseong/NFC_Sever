@@ -108,19 +108,16 @@ public class WebSocketHandler extends TextWebSocketHandler {
                     sendMessage("UUID decrypt failed", session);
                     return;
                 }
-
                 UUID uuid = UUID.fromString(decrypt);
                 if (!service.isUserExist(uuid)) {
                     sendMessage("That UUID isn't exist", session);
                     return;
                 }
-
                 if (existByUUID(uuid)) {
                     //이미 인증된 세션이 존재하는경우
                     sendMessage("Already Authentication Session exists.", session);
                     return;
                 }
-
                 authSessions.add(new AuthSocketSession(uuid, session));
                 sendMessage("Authentication success", session);
 
@@ -136,7 +133,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         //여기서는 리스트 세션 종료.
         removeSession(session);
-        log.info("connection closed : {}", session.getId());
+        log.info("connection closed : {} | {}", session.getId(), status.getCode());
     }
 
     //async socket 검증
