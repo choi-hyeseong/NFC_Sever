@@ -5,7 +5,6 @@ import com.comet.nfc_sever.model.AuthSocketSession;
 import com.comet.nfc_sever.model.Twin;
 import com.comet.nfc_sever.service.EncryptService;
 import com.comet.nfc_sever.service.NfcUserService;
-import com.comet.nfc_sever.util.StringUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,6 +33,9 @@ public class WebSocketHandler extends TextWebSocketHandler {
     private final ObjectMapper mapper;
     private final NfcUserService service;
     private final EncryptService encryptService;
+
+    @Value("${nfc.server.request-timeout}")
+    private long requestTimeout;
 
     // handler 입장에서는 천천히 로딩해도 됨.
     public WebSocketHandler(ObjectMapper mapper, EncryptService encryptService, @Lazy NfcUserService service) {
@@ -84,7 +86,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
                 if (decryptData != null) {
                     String[] result = decryptData.split("\\|");
                     //AUTH|TRASH|value
-                    if (result.length == 3 && result[0].equals(auth)) {
+                    if (result.length == 3 && result[0].equals(auth) && checkRequestIsValid(Long.parseLong(result[1]))) {
                         //정상적 응답
                         boolean value = Boolean.parseBoolean(result[2]); //boolean 이 아닐경우 false
                         service.setUserLockStatus(uuid, value);
@@ -198,10 +200,10 @@ public class WebSocketHandler extends TextWebSocketHandler {
 
     private void sendMdmRequest(AuthSocketSession session, boolean value) throws IOException {
         // 실질적인 mdm 리퀘스트 부분..
-        // AUTH|TRASH_STR|value
+        // AUTH|TIME|value
         WebSocketSession socketSession = session.getSession();
         String auth = service.getAuthKey(session.getUuid());
-        String encAuth = encryptService.AESEncrypt(auth + "|" + StringUtil.generateRandomString(5) + "|" + value, session.getUuid().toString());
+        String encAuth = encryptService.AESEncrypt(auth + "|" + System.currentTimeMillis() + "|" + value, session.getUuid().toString());
         SocketMessageDto dto = new SocketMessageDto(Status.EXECUTE_MDM, encAuth);
         sendObject(dto, socketSession);
     }
@@ -225,5 +227,9 @@ public class WebSocketHandler extends TextWebSocketHandler {
 
     private void sendObject(SocketMessageDto dto, WebSocketSession session) throws IOException {
         session.sendMessage(new TextMessage(mapper.writeValueAsString(dto)));
+    }
+
+    private boolean checkRequestIsValid(long time) {
+        return (System.currentTimeMillis() - time) <= requestTimeout;
     }
 }
