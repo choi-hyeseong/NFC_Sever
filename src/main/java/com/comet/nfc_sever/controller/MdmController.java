@@ -1,9 +1,11 @@
 package com.comet.nfc_sever.controller;
 
+import com.comet.nfc_sever.dto.MDMStatusDto;
 import com.comet.nfc_sever.dto.MdmRequestDto;
 import com.comet.nfc_sever.response.WebResponse;
 import com.comet.nfc_sever.service.EncryptService;
 import com.comet.nfc_sever.service.NfcUserService;
+import com.comet.nfc_sever.util.StringUtil;
 import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RequiredArgsConstructor
@@ -64,5 +67,42 @@ public class MdmController {
         else
             response = new ResponseEntity<>(new WebResponse<>("Internal Error", "Internal Error Encountered."), HttpStatus.INTERNAL_SERVER_ERROR); //카드 인식 올바르게 안된경우
         return response;
+    }
+
+    @GetMapping("/status")
+    public ResponseEntity<WebResponse<List<MDMStatusDto>>> status() {
+        // local 에서만 접근 가능하게 설정.
+        String msg = "OK";
+        List<MDMStatusDto> list = service.getAllUserStatus();
+        if (list.isEmpty())
+            msg = "Data is empty";
+        return new ResponseEntity<>(new WebResponse<>(msg, list), HttpStatus.OK);
+    }
+
+    @PostMapping("/server/request") //서버에서 요청하는 리퀘스트, dto의 데이터는 uuid
+    public ResponseEntity<HttpStatus> serverRequest(@RequestBody MdmRequestDto dto) {
+        HttpStatus status;
+        if (!StringUtil.isUUID(dto.getData()))
+            status = HttpStatus.BAD_REQUEST;
+        else {
+            UUID data = UUID.fromString(dto.getData());
+            if (service.isUserExist(data)) {
+                service.executeMDM(data, !service.getMDMStatus(data));
+                status = HttpStatus.OK;
+            }
+            else
+                status = HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+        return new ResponseEntity<>(status, status);
+    }
+
+    @PostMapping("/server/disconnect") //서버에서 요청하는 리퀘스트, dto의 데이터는 uuid
+    public ResponseEntity<Boolean> serverDisconnect(@RequestBody MdmRequestDto dto) {
+        boolean result;
+        if (!StringUtil.isUUID(dto.getData()))
+            result = false;
+        else
+            result = service.disconnectUser(UUID.fromString(dto.getData()));
+        return new ResponseEntity<>(result, result ? HttpStatus.OK : HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

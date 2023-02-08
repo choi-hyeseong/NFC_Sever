@@ -1,5 +1,6 @@
 package com.comet.nfc_sever.service;
 
+import com.comet.nfc_sever.dto.MDMStatusDto;
 import com.comet.nfc_sever.dto.NfcUserRequestDto;
 import com.comet.nfc_sever.handler.WebSocketHandler;
 import com.comet.nfc_sever.model.NfcUser;
@@ -10,6 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -57,5 +60,24 @@ public class NfcUserService {
     @Transactional
     public boolean getMDMStatus(UUID uuid) {
         return isUserExist(uuid) && repository.findByUuid(uuid).get().isLocked();
+    }
+
+    @Transactional
+    public List<MDMStatusDto> getAllUserStatus() {
+        List<MDMStatusDto> result = new ArrayList<>();
+        List<NfcUser> users = repository.findAll();
+        for (NfcUser user : users)
+            //get server connected
+            result.add(new MDMStatusDto(user.getId(), user.getUuid(), user.getAuthKey(), user.getDeleteKey(), user.isLocked(), handler.existByUUID(user.getUuid())));
+        return result;
+
+    }
+
+    @Transactional
+    public boolean disconnectUser(UUID uuid) {
+        if (handler.existByUUID(uuid)) {
+            return handler.disconnect(uuid);
+        }
+        return false;
     }
 }

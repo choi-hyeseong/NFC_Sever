@@ -159,6 +159,18 @@ public class WebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    public boolean disconnect(UUID uuid) {
+        synchronized (authSessions) {
+            try {
+                findByUUID(uuid).orElseThrow().getSession().close();
+                return true;
+            }
+            catch (Exception e) {
+                return false;
+            }
+        }
+    }
+
     @Scheduled(fixedDelayString = "${nfc.server.ping-interval}")
     public void ping() {
         synchronized (authSessions) {
@@ -194,7 +206,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
         return authSessions.stream().anyMatch((auth) -> auth.getSession().equals(session));
     }
 
-    private boolean existByUUID(UUID uuid) {
+    public boolean existByUUID(UUID uuid) {
         return authSessions.stream().anyMatch((auth) -> auth.getUuid().equals(uuid));
     }
 
